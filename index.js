@@ -1,97 +1,61 @@
-import puppeteer from 'puppeteer-core';
-import fs from 'fs';
+const puppeteer = require('puppeteer');
+const { Hono } = require('hono');
+const { serve } = require('@hono/node-server');
 
-const findChromiumExecutable = () => {
-  const paths = [
-    '/usr/bin/chromium',
-    '/usr/bin/chromium-browser',
-    '/usr/bin/google-chrome',
-    '/usr/local/bin/chromium',
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  ];
+const app = new Hono();
 
-  for (const path of paths) {
-    if (fs.existsSync(path)) return path;
-  }
+app.get('/', async (c) => {
+  // Récupère l'URL à scraper depuis l'URL : /?url=https://exemple.com
+  const url = c.req.query('url') || 'https://apify.com';
 
-  throw new Error('❌ Chromium introuvable sur le système. Vérifie le chemin ou installe Chromium.');
-};
-
-const executablePath = findChromiumExecutable();
-
-const startUrls = [
-  'https://www.twitch.tv/mother3rd/clip/UgliestSourKangarooBudStar-m-1ELlDE0wvrnK0_',
-];
-
-const scrapeClip = async (url) => {
   const browser = await puppeteer.launch({
     headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    executablePath,
+    args: ['--disable-gpu', '--no-sandbox'],
   });
-
   const page = await browser.newPage();
-  console.log(`🔍 Scraping ${url}`);
+
   await page.goto(url, { waitUntil: 'networkidle2' });
 
+  // Clique sur le bouton si besoin
   const button = await page.$('[data-a-target="content-classification-gate-overlay-start-watching-button"]');
   if (button) {
-    console.log("👉 Bouton 'Commencer à regarder' trouvé, clic...");
     await button.click();
     await page.waitForTimeout(1000);
   }
 
-  let videoUrl = null;
+  // Cherche la vidéo
+  await page.waitForFunction(() => document.querySelector('video')?.src, { timeout: 15000 }).catch(() => {});
+  let videoUrl = await page.$eval('video', video => video.src).catch(() => null);
 
-  try {
-    await page.waitForFunction(() => document.querySelector('video')?.src, { timeout: 15000 });
-    videoUrl = await page.$eval('video', video => video.src);
-  } catch {
-    console.log("🚫 Vidéo directe introuvable, on tente les iframes...");
-  }
-
+  // Cherche dans les iframes si besoin
   if (!videoUrl) {
     for (const frame of page.frames()) {
       try {
         videoUrl = await frame.$eval('video', video => video.src);
-        if (videoUrl) {
-          console.log(`📹 Vidéo trouvée dans une iframe : ${videoUrl}`);
-          break;
-        }
-      } catch {
-        continue;
-      }
+        if (videoUrl) break;
+      } catch (e) { continue; }
     }
   }
 
+  // Intercepte les requêtes médias si besoin
   if (!videoUrl) {
-    console.log('📡 Recherche dans les requêtes réseau...');
-    page.on('response', async (response) => {
+    page.on('response', async response => {
       if (response.request().resourceType() === 'media') {
-        const url = response.url();
-        if (url.endsWith('.mp4')) {
-          console.log(`🎯 Clip détecté : ${url}`);
-          videoUrl = url;
-        }
+        videoUrl = response.url();
       }
     });
-
-    await page.reload({ waitUntil: 'networkidle2' });
     await page.waitForTimeout(5000);
   }
 
-  if (videoUrl) {
-    console.log('✅ Clip trouvé !');
-    console.log(JSON.stringify({ url, videoUrl }, null, 2));
-  } else {
-    console.warn(`⚠️ Aucun lien vidéo trouvé pour ${url}`);
-  }
-
   await browser.close();
-};
 
-(async () => {
-  for (const url of startUrls) {
-    await scrapeClip(url);
-  }
-})();
+  // Retourne le résultat en JSON
+  return c.json({
+    page: url,
+    videoUrl: videoUrl || null,
+    status: videoUrl ? 'ok' : 'not found'
+  });
+});
+
+serve({ fetch: app.fetch, port: 8080 });
+console.log('Serveur lancé sur le port 8080');
