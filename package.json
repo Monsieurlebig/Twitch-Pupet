@@ -1,12 +1,15 @@
 {
-  "name": "twitch-clip-scraper",
+  "name": "scraping-leapcell",
   "version": "1.0.0",
-  "type": "module",
   "main": "index.js",
+  "type": "module",
   "scripts": {
-    "start": "./install-chromium.sh"  // Appel du script shell pour configurer Chromium avant de lancer Node.js
+    "start": "node index.js"
   },
   "dependencies": {
-    "puppeteer-core": "^21.3.8"
-  }
+  "puppeteer": "^22.8.2",
+  "hono": "^4.0.0",
+  "@hono/node-server": "^1.7.6"
+}
+
 }
