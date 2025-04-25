@@ -1,44 +1,76 @@
 import puppeteer from 'puppeteer';
 
-(async () => {
-  const url = 'https://www.twitch.tv/mother3rd/clip/UgliestSourKangarooBudStar-m-1ELlDE0wvrnK0_'; // Remplace par l’URL du clip
-  const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] });
-  const page = await browser.newPage();
+const startUrls = [
+    'https://www.twitch.tv/mother3rd/clip/UgliestSourKangarooBudStar-m-1ELlDE0wvrnK0_', // à remplacer par tes vraies URLs
+];
 
-  // Interception pour choper les flux médias si besoin
-  let videoUrl = null;
-  page.on('response', async response => {
-    if (response.request().resourceType() === 'media') {
-      const candidate = response.url();
-      if (candidate.endsWith('.mp4') || candidate.includes('.m3u8')) {
-        videoUrl = candidate;
-      }
+const scrapeClip = async (url) => {
+    const browser = await puppeteer.launch({
+        headless: true,
+        args: ['--disable-gpu', '--no-sandbox'],
+    });
+
+    const page = await browser.newPage();
+    console.log(`Scraping ${url}`);
+    await page.goto(url, { waitUntil: 'networkidle2' });
+
+    // Vérifie si le bouton "Commencer à regarder" est présent
+    const button = await page.$('[data-a-target="content-classification-gate-overlay-start-watching-button"]');
+    if (button) {
+        console.log("Bouton trouvé, on clique dessus...");
+        await button.click();
+        await page.waitForTimeout(1000);
+    } else {
+        console.log("Pas de bouton, on continue...");
     }
-  });
 
-  await page.goto(url, { waitUntil: 'networkidle2' });
+    // Attendre qu'une vidéo soit présente
+    let videoUrl = null;
+    try {
+        await page.waitForFunction(() => document.querySelector('video')?.src, { timeout: 15000 });
+        videoUrl = await page.$eval('video', video => video.src);
+    } catch (err) {
+        console.log("Pas de vidéo directe trouvée. Tentative dans les iframes...");
+    }
 
-  // Clique sur le bouton "Commencer à regarder" si présent
-  const button = await page.$('[data-a-target="content-classification-gate-overlay-start-watching-button"]');
-  if (button) {
-    await button.click();
-    await page.waitForTimeout(1000);
-  }
+    // Chercher dans les iframes si rien trouvé
+    if (!videoUrl) {
+        for (const frame of page.frames()) {
+            try {
+                videoUrl = await frame.$eval('video', video => video.src);
+                if (videoUrl) {
+                    console.log(`Vidéo trouvée dans iframe : ${videoUrl}`);
+                    break;
+                }
+            } catch (e) {
+                continue;
+            }
+        }
+    }
 
-  // Attendre que la vidéo soit présente
-  await page.waitForFunction(() => document.querySelector('video')?.src, { timeout: 15000 }).catch(() => {});
+    // Intercepter les requêtes réseau si toujours rien
+    if (!videoUrl) {
+        console.log('Tentative de récupération via les requêtes réseau...');
+        page.on('response', async (response) => {
+            if (response.request().resourceType() === 'media') {
+                const url = response.url();
+                console.log(`URL media détectée : ${url}`);
+                videoUrl = url;
+            }
+        });
+        await page.waitForTimeout(5000); // attendre que les requêtes passent
+    }
 
-  // Essayer de récupérer l’URL directement
-  if (!videoUrl) {
-    videoUrl = await page.$eval('video', v => v.src).catch(() => null);
-  }
+    if (videoUrl) {
+        console.log('✅ Clip trouvé !');
+        console.log(JSON.stringify({ url, videoUrl }, null, 2));
+    } else {
+        console.warn(`⚠️ Aucun lien vidéo trouvé pour ${url}`);
+    }
 
-  // Si toujours rien, attendre l’interception réseau
-  if (!videoUrl) {
-    await page.waitForTimeout(5000);
-  }
+    await browser.close();
+};
 
-  console.log('Video URL:', videoUrl);
-
-  await browser.close();
-})();
+for (const url of startUrls) {
+    await scrapeClip(url);
+}
