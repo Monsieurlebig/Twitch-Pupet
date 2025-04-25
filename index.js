@@ -5,8 +5,9 @@ const { serve } = require('@hono/node-server');
 const app = new Hono();
 
 app.get('/', async (c) => {
-  // Récupère l'URL à scraper depuis l'URL : /?url=https://exemple.com
-  const url = c.req.query('url') || 'https://apify.com';
+  // Utilisation d'une URL en dur
+  const url = 'https://www.twitch.tv/mother3rd/clip/UgliestSourKangarooBudStar-m-1ELlDE0wvrnK0_';  // Remplace cette URL par celle que tu souhaites
+});
 
   const browser = await puppeteer.launch({
     headless: true,
