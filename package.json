@@ -1,13 +1,12 @@
 {
-  "name": "twitch-clip-downloader",
+  "name": "twitch-clip-scraper",
   "version": "1.0.0",
-  "description": "Script pour récupérer l’URL .mp4 d’un clip Twitch",
-  "main": "index.js",
   "type": "module",
+  "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "puppeteer": "^23.0.0"
+    "puppeteer": "^21.3.8"
   }
 }
