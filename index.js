@@ -1,7 +1,7 @@
 import puppeteer from 'puppeteer';
 
 (async () => {
-  const url = 'URL_DU_CLIP_TWITCH'; // Remplace par l’URL du clip
+  const url = 'https://www.twitch.tv/mother3rd/clip/UgliestSourKangarooBudStar-m-1ELlDE0wvrnK0_'; // Remplace par l’URL du clip
   const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] });
   const page = await browser.newPage();
 
