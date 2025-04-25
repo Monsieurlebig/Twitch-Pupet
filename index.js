@@ -1,14 +1,33 @@
 import puppeteer from 'puppeteer-core';
+import fs from 'fs';
+
+const findChromiumExecutable = () => {
+  const paths = [
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/google-chrome',
+    '/usr/local/bin/chromium',
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  ];
+
+  for (const path of paths) {
+    if (fs.existsSync(path)) return path;
+  }
+
+  throw new Error('❌ Chromium introuvable sur le système. Vérifie le chemin ou installe Chromium.');
+};
+
+const executablePath = findChromiumExecutable();
 
 const startUrls = [
-  'https://www.twitch.tv/mother3rd/clip/UgliestSourKangarooBudStar-m-1ELlDE0wvrnK0_', // remplace par tes clips
+  'https://www.twitch.tv/mother3rd/clip/UgliestSourKangarooBudStar-m-1ELlDE0wvrnK0_',
 ];
 
 const scrapeClip = async (url) => {
   const browser = await puppeteer.launch({
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    executablePath: '/usr/bin/chromium-browser', // chemin classique sur Leapcell / Docker
+    executablePath,
   });
 
   const page = await browser.newPage();
